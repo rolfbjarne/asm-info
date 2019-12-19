@@ -1,17 +1,11 @@
-all:
-	@$(MAKE) $(CURDIR)/bin/Debug/asm-info.exe
-	@$(MAKE) install
+all install: $(CURDIR)/bin/Debug/asm-info.exe $(HOME)/bin/asm-info
 
-$(CURDIR)/bin/Debug/asm-info.exe:
-	@xbuild /nologo /verbosity:quiet
+$(CURDIR)/bin/Debug/asm-info.exe: $(wildcard *.cs */*.cs)
+	@msbuild /nologo /verbosity:quiet
 
-install: $(HOME)/bin/asm-info
-
-$(HOME)/bin/asm-info:
+$(HOME)/bin/asm-info: Makefile
 	@echo "#!/bin/bash -e" > $@
 	@echo "" >> $@
 	@echo 'mono --debug $(CURDIR)/bin/Debug/asm-info.exe "$$@"' >> $@
 	@chmod +x $@
 	@echo Created $@
-
-.PHONY: $(HOME)/bin/asm-info
