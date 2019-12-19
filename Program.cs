@@ -12,6 +12,8 @@ namespace asminfo
 	class MainClass
 	{
 		static string filter;
+		static bool show_typedefs;
+		static bool show_pe = true;
 		static bool show_pe_headers;
 
 		static void CollectAssemblies (string directory, HashSet<string> files)
@@ -32,9 +34,11 @@ namespace asminfo
 		public static int Main (string[] args)
 		{
 			var files = new HashSet<string> ();
-
-			var options = new OptionSet () {
-				{ "h|?|help", "Help!", v => Console.WriteLine ("help!") },
+			var show_help = false;
+			
+			OptionSet options = null;
+			options = new OptionSet () {
+				{ "h|?|help", "Help!", v => show_help = true },
 				{ "r|recurse:", "Recursive and find all assemblies in the specified directory", v =>
 					{
 						if (string.IsNullOrEmpty (v))
@@ -43,11 +47,18 @@ namespace asminfo
 					}
 				},
 				{ "pe-headers", "Show PE headers", v => show_pe_headers = true },
+				{ "typedef", "List types", v => show_typedefs = true },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 			};
 
 			foreach (var f in options.Parse (args))
 				files.Add (f);
+
+			if (show_help) {
+				Console.WriteLine ("asm-info [options] assembly1 [assembly2+]");
+				options.WriteOptionDescriptions (Console.Out);
+				return 0;
+			}
 
 			if (files.Count == 0) {
 				Console.WriteLine ("No files specified");
@@ -79,7 +90,68 @@ namespace asminfo
 			}
 		}
 
-		public static void Process (string file)
+		static int Process (string file)
+		{
+			if (show_typedefs) {
+				ShowTypeDefs (file);
+			} else if (show_pe) {
+				ShowPE (file);
+			} else {
+				Console.WriteLine ("No action!");
+				return 1;
+			}
+			return 0;
+		}
+
+		static int ShowTypeDefs (string file)
+		{
+			var ad = AssemblyDefinition.ReadAssembly (file, new ReaderParameters { ReadingMode = ReadingMode.Deferred });
+			foreach (var td in ad.MainModule.Types)
+				Console.WriteLine ($"{td.FullName} : {td.BaseType?.FullName} ({ToString (td.Attributes)})");
+			return 0;
+		}
+
+		static string GetVisibility (TypeAttributes attributes)
+		{
+			switch (attributes & TypeAttributes.VisibilityMask) {
+			case TypeAttributes.NotPublic:
+				return "internal";
+			case TypeAttributes.Public:
+			case TypeAttributes.NestedPublic:
+				return "public";
+			case TypeAttributes.NestedAssembly:
+				return "internal";
+			case TypeAttributes.NestedFamANDAssem:
+				return "private protected";
+			case TypeAttributes.NestedFamily:
+				return "protected";
+			case TypeAttributes.NestedFamORAssem:
+				return "internal protected";
+			case TypeAttributes.NestedPrivate:
+				return "private";
+			default:
+				return "unknown visibility";
+			}
+		}
+
+		static string ToString (TypeAttributes attributes)
+		{
+			var sb = new StringBuilder ();
+			sb.Append (GetVisibility (attributes));
+			if ((attributes & TypeAttributes.Abstract) == TypeAttributes.Abstract)
+				sb.Append (" abstract");
+			if ((attributes & TypeAttributes.BeforeFieldInit) == TypeAttributes.BeforeFieldInit)
+				sb.Append (" beforefieldinit");
+			if ((attributes & TypeAttributes.Forwarder) == TypeAttributes.Forwarder)
+				sb.Append (" forwarder");
+			if ((attributes & TypeAttributes.Interface) == TypeAttributes.Interface)
+				sb.Append (" interface");
+			if ((attributes & TypeAttributes.Sealed) == TypeAttributes.Sealed)
+				sb.Append (" sealed");
+			return sb.ToString ();
+		}
+
+		public static void ShowPE (string file)
 		{
 			using (var fs = new FileStream (file, System.IO.FileMode.Open, System.IO.FileAccess.Read)) {
 				// Get the PE timestamp.
