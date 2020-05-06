@@ -118,7 +118,17 @@ namespace asminfo
 
 		static int ShowDebugInfo (string file)
 		{
-			var ad = AssemblyDefinition.ReadAssembly (file, new ReaderParameters { ReadingMode = ReadingMode.Deferred, ReadSymbols = true, });
+			AssemblyDefinition ad;
+			var rp = new ReaderParameters { ReadingMode = ReadingMode.Deferred };
+
+			rp.ReadSymbols = true;
+			try {
+				ad = AssemblyDefinition.ReadAssembly (file, rp);
+			} catch (Mono.Cecil.Cil.SymbolsNotFoundException) {
+				rp.ReadSymbols = false;
+				ad = AssemblyDefinition.ReadAssembly (file, rp);
+			}
+
 			Console.WriteLine ($"{ad.FullName}");
 			foreach (var d in ad.MainModule.CustomDebugInformations) {
 				Console.WriteLine ($"\tCustom debug info: {d.Kind}");
