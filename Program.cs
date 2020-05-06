@@ -13,6 +13,7 @@ namespace asminfo
 	{
 		static string filter;
 		static bool show_typedefs;
+		static bool show_debug_info;
 		static bool show_pe = true;
 		static bool show_pe_headers;
 
@@ -48,6 +49,7 @@ namespace asminfo
 				},
 				{ "pe-headers", "Show PE headers", v => show_pe_headers = true },
 				{ "typedef", "List types", v => show_typedefs = true },
+				{ "debug-info", "Show debug information", v => show_debug_info = true },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 			};
 
@@ -94,6 +96,8 @@ namespace asminfo
 		{
 			if (show_typedefs) {
 				ShowTypeDefs (file);
+			} else if (show_debug_info) {
+				ShowDebugInfo (file);
 			} else if (show_pe) {
 				ShowPE (file);
 			} else {
@@ -106,8 +110,29 @@ namespace asminfo
 		static int ShowTypeDefs (string file)
 		{
 			var ad = AssemblyDefinition.ReadAssembly (file, new ReaderParameters { ReadingMode = ReadingMode.Deferred });
+			Console.WriteLine ($"{ad.FullName}");
 			foreach (var td in ad.MainModule.Types)
-				Console.WriteLine ($"{td.FullName} : {td.BaseType?.FullName} ({ToString (td.Attributes)})");
+				Console.WriteLine ($"\t{td.FullName} : {td.BaseType?.FullName} ({ToString (td.Attributes)})");
+			return 0;
+		}
+
+		static int ShowDebugInfo (string file)
+		{
+			var ad = AssemblyDefinition.ReadAssembly (file, new ReaderParameters { ReadingMode = ReadingMode.Deferred, ReadSymbols = true, });
+			Console.WriteLine ($"{ad.FullName}");
+			foreach (var d in ad.MainModule.CustomDebugInformations) {
+				Console.WriteLine ($"\tCustom debug info: {d.Kind}");
+			}
+			var reader = ad.MainModule.SymbolReader;
+			Console.WriteLine ($"\tSymbolReader: {reader?.GetType ()}");
+			if (ad.MainModule.HasDebugHeader) {
+				var dh = ad.MainModule.GetDebugHeader ();
+				if (dh.HasEntries) {
+					foreach (var e in dh.Entries) {
+						Console.WriteLine ($"\tDebugHeader: {e.Directory.Type}");
+					}
+				}
+			}
 			return 0;
 		}
 
