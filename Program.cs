@@ -298,68 +298,90 @@ namespace asminfo
 					Console.WriteLine ("    No direct assembly references.");
 				}
 				if (mod.MainModule.HasCustomAttributes) {
-					var all_attributes = mod.MainModule.GetCustomAttributes ().ToList ();
-					var anrs = new Dictionary<string, List<CustomAttribute>> ();
-					foreach (var ca in all_attributes) {
-						var args = new List<CustomAttributeArgument> ();
-						if (ca.HasConstructorArguments)
-							args.AddRange (ca.ConstructorArguments);
-						if (ca.HasFields)
-							args.AddRange (ca.Fields.Select (v => v.Argument));
-						if (ca.HasProperties)
-							args.AddRange (ca.Properties.Select (v => v.Argument));
-						foreach (var arg in args) {
-							if (arg.Type.Namespace != "System" || arg.Type.Name != "Type")
-								continue;
-							var tr = arg.Value as TypeReference;
-							var ar = tr.Scope as AssemblyNameReference;
-							if (ar == null)
-								continue;
-							if (!anrs.TryGetValue (ar.FullName, out var list))
-								anrs [ar.FullName] = list = new List<CustomAttribute> ();
-							list.Add (ca);
-						}
-					}
-					if (anrs.Count == 0)
-						Console.WriteLine ($"    No assembly references in {all_attributes.Count} custom attributes");
-					else {
-						Console.WriteLine ("    Assembly references in custom attributes:");
-						foreach (var r in anrs.OrderBy (v => v.Key)) {
-							Console.WriteLine ("        {0}", r.Key);
-							foreach (var ca in r.Value) {
-								Console.Write ($"            {ca.AttributeType.FullName} (");
-								bool first = true;
-								if (ca.HasConstructorArguments) {
-									foreach (var arg in ca.ConstructorArguments) {
-										if (!first)
-											Console.Write (", ");
-										first = false;
-										Console.Write (arg.Value);
-									}
-								}
-								if (ca.HasFields) {
-									foreach (var arg in ca.Fields) {
-										if (!first)
-											Console.Write (", ");
-										first = false;
-										Console.Write ($"{arg.Name} = {arg.Argument.Value}");
-									}
-								}
-								if (ca.HasProperties) {
-									foreach (var arg in ca.Properties) {
-										if (!first)
-											Console.Write (", ");
-										first = false;
-										Console.Write ($"{arg.Name} = {arg.Argument.Value}");
-									}
-								}
-								Console.WriteLine (")");
+					try {
+						var all_attributes = mod.MainModule.GetCustomAttributes ().ToList ();
+						var anrs = new Dictionary<string, List<CustomAttribute>> ();
+						foreach (var ca in all_attributes) {
+							var args = new List<CustomAttributeArgument> ();
+							if (ca.HasConstructorArguments)
+								args.AddRange (ca.ConstructorArguments);
+							if (ca.HasFields)
+								args.AddRange (ca.Fields.Select (v => v.Argument));
+							if (ca.HasProperties)
+								args.AddRange (ca.Properties.Select (v => v.Argument));
+							foreach (var arg in args) {
+								if (arg.Type.Namespace != "System" || arg.Type.Name != "Type")
+									continue;
+								var tr = arg.Value as TypeReference;
+								var ar = tr.Scope as AssemblyNameReference;
+								if (ar == null)
+									continue;
+								if (!anrs.TryGetValue (ar.FullName, out var list))
+									anrs [ar.FullName] = list = new List<CustomAttribute> ();
+								list.Add (ca);
 							}
 						}
+						if (anrs.Count == 0)
+							Console.WriteLine ($"    No assembly references in {all_attributes.Count} custom attributes");
+						else {
+							Console.WriteLine ("    Assembly references in custom attributes:");
+							foreach (var r in anrs.OrderBy (v => v.Key)) {
+								Console.WriteLine ("        {0}", r.Key);
+								foreach (var ca in r.Value) {
+									Console.Write ($"            {ca.AttributeType.FullName} (");
+									bool first = true;
+									if (ca.HasConstructorArguments) {
+										foreach (var arg in ca.ConstructorArguments) {
+											if (!first)
+												Console.Write (", ");
+											first = false;
+											Console.Write (arg.Value);
+										}
+									}
+									if (ca.HasFields) {
+										foreach (var arg in ca.Fields) {
+											if (!first)
+												Console.Write (", ");
+											first = false;
+											Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+										}
+									}
+									if (ca.HasProperties) {
+										foreach (var arg in ca.Properties) {
+											if (!first)
+												Console.Write (", ");
+											first = false;
+											Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+										}
+									}
+									Console.WriteLine (")");
+								}
+							}
+						}
+					} catch (Exception e) {
+						Console.WriteLine ($"    Failed to load custom attributes for '{mod.Name.Name}': {e.Message}");
 					}
 				} else {
 					Console.WriteLine ("    No custom attributes.");
 				}
+
+				if (mod.MainModule.HasResources) {
+					Console.WriteLine ($"    {mod.MainModule.Resources.Count} resource(s):");
+					foreach (var res in mod.MainModule.Resources) {
+						switch (res.ResourceType) {
+						case ResourceType.Embedded:
+							var er = (EmbeddedResource) res;
+							Console.WriteLine ($"        {res.Name} ({res.ResourceType}) Size: {er.GetResourceData ().Length} bytes");
+							break;
+						default:
+							Console.WriteLine ($"        {res.Name} ({res.ResourceType})");
+							break;
+						}
+					}
+				} else {
+					Console.WriteLine ("    No embedded resources.");
+				}
+
 
 				if (show_pe_headers) {
 					var pe = new PeHeaderReader (file);
