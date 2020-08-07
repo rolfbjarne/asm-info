@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -13,6 +14,8 @@ namespace asminfo
 	{
 		static string filter;
 		static bool show_typedefs;
+		static bool show_methoddefs;
+		static bool show_pinvoke;
 		static bool show_debug_info;
 		static bool show_pe = true;
 		static bool show_pe_headers;
@@ -49,6 +52,7 @@ namespace asminfo
 				},
 				{ "pe-headers", "Show PE headers", v => show_pe_headers = true },
 				{ "typedef", "List types", v => show_typedefs = true },
+				{ "methoddef", "List methods", v => show_methoddefs = true },
 				{ "debug-info", "Show debug information", v => show_debug_info = true },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 			};
@@ -110,10 +114,73 @@ namespace asminfo
 		static int ShowTypeDefs (string file)
 		{
 			var ad = AssemblyDefinition.ReadAssembly (file, new ReaderParameters { ReadingMode = ReadingMode.Deferred });
-			Console.WriteLine ($"{ad.FullName}");
-			foreach (var td in ad.MainModule.Types)
-				Console.WriteLine ($"\t{td.FullName} : {td.BaseType?.FullName} ({ToString (td.Attributes)})");
-			return 0;
+			var rv = 0;
+			PrintLine ($"{ad.FullName}");
+			rv |= ShowTypeDefs (1, ad.MainModule.Types);
+			return rv;
+		}
+
+		static int ShowTypeDefs (int indent, IEnumerable<TypeDefinition> types)
+		{
+			var rv = 0;
+			foreach (var td in types)
+				rv |= ShowTypeDef (indent, td);
+			return rv;
+		}
+
+		static int ShowTypeDef (int indent, TypeDefinition td)
+		{
+			var rv = 0;
+			PrintIndent (indent);
+			Print ($"{td.FullName}");
+			if (td.BaseType != null)
+				Print ($" : {td.BaseType?.FullName}");
+			Print ($" ({ToString (td.Attributes)})");
+			Print ($" {td.Methods.Count} methods, {td.Fields.Count} fields, {td.Properties.Count} properties, {td.Events.Count} events, {td.HasNestedTypes} nested types");
+			PrintLine ("");
+			if (td.HasNestedTypes)
+				rv |= ShowTypeDefs (indent + 1, td.NestedTypes);
+			if (show_methoddefs && td.HasMethods)
+				ShowMethodDefs (indent + 1, td.Methods);
+			else {
+				// Console.WriteLine ($"Not showing methods: {show_methoddefs} {td.HasMethods}");
+			}
+			return rv;
+		}
+
+		static int ShowMethodDefs (int indent, IEnumerable<MethodDefinition> methods)
+		{
+			var rv = 0;
+			foreach (var method in methods)
+				rv |= ShowMethodDef (indent, method);
+			return rv;
+		}
+
+		static int ShowMethodDef (int indent, MethodDefinition method)
+		{
+			var rv = 0;
+			PrintIndent (indent);
+			if (method.HasPInvokeInfo) {
+				var pimpl = method.PInvokeInfo;
+				Print ($"[DllImport (\"{pimpl.Module.Name}\", EntryPoint = \"{pimpl.EntryPoint}\")] ");
+			}
+			PrintLine (method.FullName);
+			return rv;
+		}
+
+		static void Print (string message)
+		{
+			Console.Write (message);
+		}
+
+		static void PrintLine (string message)
+		{
+			Console.WriteLine (message);
+		}
+
+		static void PrintIndent (int indent)
+		{
+			Console.Write (new string ('\t', indent));
 		}
 
 		static int ShowDebugInfo (string file)
@@ -206,7 +273,12 @@ namespace asminfo
 					sb.Append (hash [i].ToString ("X2"));
 				fs.Position = 0;
 
-				var mod = AssemblyDefinition.ReadAssembly (fs);
+				var rp = new ReaderParameters (ReadingMode.Deferred);
+				var resolver = new DefaultAssemblyResolver ();
+				resolver.AddSearchDirectory (Path.GetDirectoryName (file));
+				rp.AssemblyResolver = resolver;
+
+				var mod = AssemblyDefinition.ReadAssembly (fs, rp);
 
 				Console.WriteLine ("{0} (MD5: {1}) {2}:", file, sb.ToString (), mod.FullName);
 
@@ -220,10 +292,73 @@ namespace asminfo
 				// Print references
 				if (mod.MainModule.HasAssemblyReferences) {
 					Console.WriteLine ("    References:");
-					foreach (var r in mod.MainModule.AssemblyReferences)
+					foreach (var r in mod.MainModule.AssemblyReferences.OrderBy (v => v.FullName))
 						Console.WriteLine ("        {0}", r.FullName);
 				} else {
-					Console.WriteLine ("    No references.");
+					Console.WriteLine ("    No direct assembly references.");
+				}
+				if (mod.MainModule.HasCustomAttributes) {
+					var all_attributes = mod.MainModule.GetCustomAttributes ().ToList ();
+					var anrs = new Dictionary<string, List<CustomAttribute>> ();
+					foreach (var ca in all_attributes) {
+						var args = new List<CustomAttributeArgument> ();
+						if (ca.HasConstructorArguments)
+							args.AddRange (ca.ConstructorArguments);
+						if (ca.HasFields)
+							args.AddRange (ca.Fields.Select (v => v.Argument));
+						if (ca.HasProperties)
+							args.AddRange (ca.Properties.Select (v => v.Argument));
+						foreach (var arg in args) {
+							if (arg.Type.Namespace != "System" || arg.Type.Name != "Type")
+								continue;
+							var tr = arg.Value as TypeReference;
+							var ar = tr.Scope as AssemblyNameReference;
+							if (ar == null)
+								continue;
+							if (!anrs.TryGetValue (ar.FullName, out var list))
+								anrs [ar.FullName] = list = new List<CustomAttribute> ();
+							list.Add (ca);
+						}
+					}
+					if (anrs.Count == 0)
+						Console.WriteLine ($"    No assembly references in {all_attributes.Count} custom attributes");
+					else {
+						Console.WriteLine ("    Assembly references in custom attributes:");
+						foreach (var r in anrs.OrderBy (v => v.Key)) {
+							Console.WriteLine ("        {0}", r.Key);
+							foreach (var ca in r.Value) {
+								Console.Write ($"            {ca.AttributeType.FullName} (");
+								bool first = true;
+								if (ca.HasConstructorArguments) {
+									foreach (var arg in ca.ConstructorArguments) {
+										if (!first)
+											Console.Write (", ");
+										first = false;
+										Console.Write (arg.Value);
+									}
+								}
+								if (ca.HasFields) {
+									foreach (var arg in ca.Fields) {
+										if (!first)
+											Console.Write (", ");
+										first = false;
+										Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+									}
+								}
+								if (ca.HasProperties) {
+									foreach (var arg in ca.Properties) {
+										if (!first)
+											Console.Write (", ");
+										first = false;
+										Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+									}
+								}
+								Console.WriteLine (")");
+							}
+						}
+					}
+				} else {
+					Console.WriteLine ("    No custom attributes.");
 				}
 
 				if (show_pe_headers) {
