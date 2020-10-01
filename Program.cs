@@ -19,6 +19,7 @@ namespace asminfo
 		static bool show_debug_info;
 		static bool show_pe = true;
 		static bool show_pe_headers;
+		static bool show_attributes;
 
 		static void CollectAssemblies (string directory, HashSet<string> files)
 		{
@@ -55,6 +56,7 @@ namespace asminfo
 				{ "methoddef", "List methods", v => show_methoddefs = true },
 				{ "debug-info", "Show debug information", v => show_debug_info = true },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
+				{ "a|attributes", "Show attributes", v => show_attributes = true },
 			};
 
 			foreach (var f in options.Parse (args))
@@ -131,6 +133,14 @@ namespace asminfo
 		static int ShowTypeDef (int indent, TypeDefinition td)
 		{
 			var rv = 0;
+
+			if (show_attributes && td.HasCustomAttributes) {
+				foreach (var ca in td.CustomAttributes) {
+					PrintIndent (indent);
+					PrintLine ($"[{ca.AttributeType.FullName} (...)]");
+				}
+			}
+
 			PrintIndent (indent);
 			Print ($"{td.FullName}");
 			if (td.BaseType != null)
