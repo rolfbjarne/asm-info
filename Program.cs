@@ -174,7 +174,9 @@ namespace asminfo
 				var pimpl = method.PInvokeInfo;
 				Print ($"[DllImport (\"{pimpl.Module.Name}\", EntryPoint = \"{pimpl.EntryPoint}\")] ");
 			}
-			PrintLine (method.FullName);
+			Print (method.FullName);
+			Print ($" ({ToString (method.Attributes)})");
+			PrintLine (string.Empty);
 			return rv;
 		}
 
@@ -223,6 +225,26 @@ namespace asminfo
 			return 0;
 		}
 
+		static string GetVisibility (MethodAttributes attributes)
+		{
+			var visibility = attributes & MethodAttributes.MemberAccessMask;
+			switch (visibility) {
+			case MethodAttributes.Private:
+				return "private";
+			case MethodAttributes.Public:
+				return "public";
+			case MethodAttributes.Assembly:
+				return "internal";
+			case MethodAttributes.Family:
+				return "private protected";
+			case MethodAttributes.FamANDAssem:
+				return "private protected";
+			case MethodAttributes.FamORAssem:
+				return "internal protected";
+			default:
+				return $"unknown visibility ({visibility})";
+			}
+		}
 		static string GetVisibility (TypeAttributes attributes)
 		{
 			switch (attributes & TypeAttributes.VisibilityMask) {
@@ -260,6 +282,43 @@ namespace asminfo
 				sb.Append (" interface");
 			if ((attributes & TypeAttributes.Sealed) == TypeAttributes.Sealed)
 				sb.Append (" sealed");
+			return sb.ToString ();
+		}
+
+		static string ToString (MethodAttributes attributes)
+		{
+			var sb = new StringBuilder ();
+			sb.Append (GetVisibility (attributes));
+			if ((attributes & MethodAttributes.Abstract) == MethodAttributes.Abstract)
+				sb.Append (" abstract");
+			if ((attributes & MethodAttributes.CheckAccessOnOverride) == MethodAttributes.CheckAccessOnOverride)
+				sb.Append (" checkaccessonoverride");
+			if ((attributes & MethodAttributes.CompilerControlled) == MethodAttributes.CompilerControlled)
+				sb.Append (" compilercontrolled");
+			if ((attributes & MethodAttributes.Final) == MethodAttributes.Final)
+				sb.Append (" final");
+			if ((attributes & MethodAttributes.HasSecurity) == MethodAttributes.HasSecurity)
+				sb.Append (" hassecurity");
+			if ((attributes & MethodAttributes.HideBySig) == MethodAttributes.HideBySig)
+				sb.Append (" hidebysig");
+			if ((attributes & MethodAttributes.NewSlot) == MethodAttributes.NewSlot)
+				sb.Append (" newslot");
+			if ((attributes & MethodAttributes.PInvokeImpl) == MethodAttributes.PInvokeImpl)
+				sb.Append (" pinvokeimpl");
+			if ((attributes & MethodAttributes.RequireSecObject) == MethodAttributes.RequireSecObject)
+				sb.Append (" requiresecobject");
+			if ((attributes & MethodAttributes.ReuseSlot) == MethodAttributes.ReuseSlot)
+				sb.Append (" reuseslot");
+			if ((attributes & MethodAttributes.RTSpecialName) == MethodAttributes.RTSpecialName)
+				sb.Append (" rtspecialname");
+			if ((attributes & MethodAttributes.SpecialName) == MethodAttributes.SpecialName)
+				sb.Append (" specialname");
+			if ((attributes & MethodAttributes.Static) == MethodAttributes.Static)
+				sb.Append (" static");
+			if ((attributes & MethodAttributes.UnmanagedExport) == MethodAttributes.UnmanagedExport)
+				sb.Append (" unmanagedexport");
+			if ((attributes & MethodAttributes.Virtual) == MethodAttributes.Virtual)
+				sb.Append (" virtual");
 			return sb.ToString ();
 		}
 
