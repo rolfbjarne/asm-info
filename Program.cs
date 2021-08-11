@@ -17,6 +17,7 @@ namespace asminfo
 		static bool show_typedefs;
 		static bool show_methoddefs;
 		static bool show_fielddefs;
+		static bool show_propertydefs;
 		static bool show_pinvoke;
 		static bool show_debug_info;
 		static bool show_pe = true;
@@ -57,6 +58,7 @@ namespace asminfo
 				{ "typedef", "List types", v => show_typedefs = true },
 				{ "methoddef", "List methods", v => show_methoddefs = true },
 				{ "fielddef", "List fields", v => show_fielddefs = true },
+				{ "propertydef", "List properties", v => show_propertydefs = true },
 				{ "debug-info", "Show debug information", v => show_debug_info = true },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 				{ "a|attributes", "Show attributes", v => show_attributes = true },
@@ -286,6 +288,8 @@ namespace asminfo
 				ShowMethodDefs (indent + 1, td.Methods);
 			if (show_fielddefs && td.HasFields)
 				ShowFieldDefs (indent + 1, td.Fields);
+			if (show_propertydefs && td.HasProperties)
+				ShowPropertyDefs (indent + 1, td.Properties);
 			return rv;
 		}
 
@@ -309,6 +313,25 @@ namespace asminfo
 			return rv;
 		}
 
+		static int ShowPropertyDefs (int indent, IEnumerable<PropertyDefinition> properties)
+		{
+			var rv = 0;
+			foreach (var prop in properties)
+				rv |= ShowPropertyDef (indent, prop);
+			return rv;
+		}
+
+		static int ShowPropertyDef (int indent, PropertyDefinition prop)
+		{
+			var rv = 0;
+
+			ShowAttributes (indent, prop);
+			PrintIndent (indent);
+			Print (prop.Name);
+			Print ($" ({ToString (prop.Attributes)})");
+			PrintLine (string.Empty);
+			return rv;
+		}
 		static int ShowMethodDefs (int indent, IEnumerable<MethodDefinition> methods)
 		{
 			var rv = 0;
@@ -440,6 +463,18 @@ namespace asminfo
 			default:
 				return "unknown visibility";
 			}
+		}
+
+		static string ToString (PropertyAttributes attributes)
+		{
+			var sb = new StringBuilder ();
+			if ((attributes & PropertyAttributes.HasDefault) == PropertyAttributes.HasDefault)
+				sb.Append (" hasdefault");
+			if ((attributes & PropertyAttributes.RTSpecialName) == PropertyAttributes.RTSpecialName)
+				sb.Append (" rtspecialname");
+			if ((attributes & PropertyAttributes.SpecialName) == PropertyAttributes.SpecialName)
+				sb.Append (" specialname");
+			return sb.ToString ();
 		}
 
 		static string ToString (FieldAttributes attributes)
