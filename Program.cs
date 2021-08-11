@@ -13,8 +13,10 @@ namespace asminfo
 	class MainClass
 	{
 		static string filter;
+		static string filtertype;
 		static bool show_typedefs;
 		static bool show_methoddefs;
+		static bool show_fielddefs;
 		static bool show_pinvoke;
 		static bool show_debug_info;
 		static bool show_pe = true;
@@ -54,9 +56,11 @@ namespace asminfo
 				{ "pe-headers", "Show PE headers", v => show_pe_headers = true },
 				{ "typedef", "List types", v => show_typedefs = true },
 				{ "methoddef", "List methods", v => show_methoddefs = true },
+				{ "fielddef", "List fields", v => show_fielddefs = true },
 				{ "debug-info", "Show debug information", v => show_debug_info = true },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 				{ "a|attributes", "Show attributes", v => show_attributes = true },
+				{ "filtertype=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
 			};
 
 			foreach (var f in options.Parse (args))
@@ -98,6 +102,22 @@ namespace asminfo
 			}
 		}
 
+		static IEnumerable<TypeDefinition> FilteredTypes (IEnumerable<TypeDefinition> types)
+		{
+			if (string.IsNullOrEmpty (filtertype)) {
+				foreach (var f in types)
+					yield return f;
+			} else {
+				foreach (var f in types) {
+					var typename = f.FullName;
+					if (string.IsNullOrEmpty (typename))
+						typename = f.Name;
+					if (typename.IndexOf (filtertype, StringComparison.OrdinalIgnoreCase) >= 0)
+						yield return f;
+				}
+			}
+		}
+
 		static int Process (string file)
 		{
 			if (show_typedefs) {
@@ -125,21 +145,133 @@ namespace asminfo
 		static int ShowTypeDefs (int indent, IEnumerable<TypeDefinition> types)
 		{
 			var rv = 0;
-			foreach (var td in types)
+			foreach (var td in FilteredTypes (types))
 				rv |= ShowTypeDef (indent, td);
 			return rv;
+		}
+
+		static void RenderConstant (CustomAttributeArgument arg)
+		{
+			var obj = arg.Value;
+			var resolvedType = arg.Type.Resolve ();
+
+			if (resolvedType?.IsEnum == true) {
+				if (resolvedType.HasCustomAttributes && resolvedType.CustomAttributes.Any (v => v.AttributeType.Name == "FlagsAttribute")) {
+					var enumFields = resolvedType.Fields.Where (v => {
+						if (!v.IsStatic)
+							return false;
+
+						if (obj is byte b) {
+							return 0 != (b & (byte) v.Constant);
+						} else if (obj is sbyte sb) {
+							return 0 != (sb & (sbyte) v.Constant);
+						} else if (obj is short sh) {
+							return 0 != (sh & (short) v.Constant);
+						} else if (obj is ushort ush) {
+							return 0 != (ush & (ushort) v.Constant);
+						} else if (obj is int i) {
+							return 0 != (i & (int) v.Constant);
+						} else if (obj is uint u) {
+							return 0 != (u & (uint) v.Constant);
+						} else if (obj is long l) {
+							return 0 != (l & (long) v.Constant);
+						} else if (obj is ulong ul) {
+							return 0 != (ul & (ulong) v.Constant);
+						} else {
+							throw new NotImplementedException ($"Unknown enum type: {obj.GetType ().FullName}");
+						}
+					});
+					if (enumFields.Any ()) {
+						Print ($"{string.Join (" | ", enumFields.Select (v => $"{resolvedType.FullName}.{v.Name}"))}");
+						return;
+					} else {
+						Print ("(" + resolvedType.FullName + ") ");
+					}
+				} else {
+					var enumField = resolvedType.Fields.FirstOrDefault (v => {
+						return v.IsStatic && v.Constant == obj;
+					});
+					if (enumField != null) {
+						Print ($"{resolvedType.FullName}.{enumField.Name}");
+						return;
+					} else {
+						Print ("(" + resolvedType.FullName + ") ");
+					}
+				}
+			}
+
+			if (obj is null) {
+				Print ("null");
+			} else if (obj is string str) {
+				Print ($"\"{str.Replace ("\"", "\\\"")}\"");
+			} else if (obj is byte b) {
+				Print ($"{b}");
+			} else if (obj is sbyte sb) {
+				Print ($"{sb}");
+			} else if (obj is short sh) {
+				Print ($"{sh}");
+			} else if (obj is ushort ush) {
+				Print ($"{ush}");
+			} else if (obj is int i) {
+				Print ($"{i}");
+			} else if (obj is uint u) {
+				Print ($"{u}");
+			} else if (obj is long l) {
+				Print ($"{l}");
+			} else if (obj is ulong ul) {
+				Print ($"{ul}");
+			} else {
+				Print ($"Unknown type: {obj.GetType ().FullName} Value: {obj}");
+			}
+		}
+
+		static void RenderAttribute (CustomAttribute ca)
+		{
+			Print ($"[{ca.AttributeType.FullName} (");
+			var argCount = 0;
+			if (ca.HasConstructorArguments) {
+				for (var i = 0; i < ca.ConstructorArguments.Count; i++) {
+					if (argCount > 0)
+						Print (", ");
+					var arg = ca.ConstructorArguments [i];
+					RenderConstant (arg);
+					argCount++;
+				}
+			}
+			if (ca.HasFields) {
+				for (var i = 0; i < ca.Fields.Count; i++) {
+					if (argCount > 0)
+						Print (", ");
+					var field = ca.Fields [i];
+					Print (field.Name);
+					Print (" = ");
+					RenderConstant (field.Argument);
+					argCount++;
+				}
+			}
+
+			PrintLine (")]");
+		}
+
+		static void ShowAttributes (int indent, ICustomAttributeProvider provider)
+		{
+			if (!show_attributes)
+				return;
+
+			if (!provider.HasCustomAttributes)
+				return;
+
+			foreach (var ca in provider.CustomAttributes) {
+				PrintIndent (indent);
+				RenderAttribute (ca);
+			}
 		}
 
 		static int ShowTypeDef (int indent, TypeDefinition td)
 		{
 			var rv = 0;
 
-			if (show_attributes && td.HasCustomAttributes) {
-				foreach (var ca in td.CustomAttributes) {
-					PrintIndent (indent);
-					PrintLine ($"[{ca.AttributeType.FullName} (...)]");
-				}
-			}
+			ShowAttributes (indent, td);
 
 			PrintIndent (indent);
 			Print ($"{td.FullName}");
@@ -152,9 +284,28 @@ namespace asminfo
 				rv |= ShowTypeDefs (indent + 1, td.NestedTypes);
 			if (show_methoddefs && td.HasMethods)
 				ShowMethodDefs (indent + 1, td.Methods);
-			else {
-				// Console.WriteLine ($"Not showing methods: {show_methoddefs} {td.HasMethods}");
-			}
+			if (show_fielddefs && td.HasFields)
+				ShowFieldDefs (indent + 1, td.Fields);
+			return rv;
+		}
+
+		static int ShowFieldDefs (int indent, IEnumerable<FieldDefinition> fields)
+		{
+			var rv = 0;
+			foreach (var field in fields)
+				rv |= ShowFieldDef (indent, field);
+			return rv;
+		}
+
+		static int ShowFieldDef (int indent, FieldDefinition field)
+		{
+			var rv = 0;
+
+			ShowAttributes (indent, field);
+			PrintIndent (indent);
+			Print (field.Name);
+			Print ($" ({ToString (field.Attributes)})");
+			PrintLine (string.Empty);
 			return rv;
 		}
 
@@ -169,6 +320,7 @@ namespace asminfo
 		static int ShowMethodDef (int indent, MethodDefinition method)
 		{
 			var rv = 0;
+			ShowAttributes (indent, method);
 			PrintIndent (indent);
 			if (method.HasPInvokeInfo) {
 				var pimpl = method.PInvokeInfo;
@@ -225,6 +377,27 @@ namespace asminfo
 			return 0;
 		}
 
+		static string GetVisibility (FieldAttributes attributes)
+		{
+			var visibility = attributes & FieldAttributes.FieldAccessMask;
+			switch (visibility) {
+			case FieldAttributes.Private:
+				return "private";
+			case FieldAttributes.Public:
+				return "public";
+			case FieldAttributes.Assembly:
+				return "internal";
+			case FieldAttributes.Family:
+				return "private protected";
+			case FieldAttributes.FamANDAssem:
+				return "private protected";
+			case FieldAttributes.FamORAssem:
+				return "internal protected";
+			default:
+				return $"unknown visibility ({visibility})";
+			}
+		}
+
 		static string GetVisibility (MethodAttributes attributes)
 		{
 			var visibility = attributes & MethodAttributes.MemberAccessMask;
@@ -245,6 +418,7 @@ namespace asminfo
 				return $"unknown visibility ({visibility})";
 			}
 		}
+
 		static string GetVisibility (TypeAttributes attributes)
 		{
 			switch (attributes & TypeAttributes.VisibilityMask) {
@@ -266,6 +440,33 @@ namespace asminfo
 			default:
 				return "unknown visibility";
 			}
+		}
+
+		static string ToString (FieldAttributes attributes)
+		{
+			var sb = new StringBuilder ();
+			sb.Append (GetVisibility (attributes));
+			if ((attributes & FieldAttributes.HasDefault) == FieldAttributes.HasDefault)
+				sb.Append (" hasdefault");
+			if ((attributes & FieldAttributes.HasFieldMarshal) == FieldAttributes.HasFieldMarshal)
+				sb.Append (" hasfieldmarshal");
+			if ((attributes & FieldAttributes.HasFieldRVA) == FieldAttributes.HasFieldRVA)
+				sb.Append (" hasfieldrva");
+			if ((attributes & FieldAttributes.InitOnly	) == FieldAttributes.InitOnly)
+				sb.Append (" initonly");
+			if ((attributes & FieldAttributes.Literal) == FieldAttributes.Literal)
+				sb.Append (" literal");
+			if ((attributes & FieldAttributes.NotSerialized) == FieldAttributes.NotSerialized)
+				sb.Append (" notserialized");
+			if ((attributes & FieldAttributes.PInvokeImpl) == FieldAttributes.PInvokeImpl)
+				sb.Append (" pinvokeimpl");
+			if ((attributes & FieldAttributes.RTSpecialName) == FieldAttributes.RTSpecialName)
+				sb.Append (" rtspecialname");
+			if ((attributes & FieldAttributes.SpecialName) == FieldAttributes.SpecialName)
+				sb.Append (" specialname");
+			if ((attributes & FieldAttributes.Static) == FieldAttributes.Static)
+				sb.Append (" static");
+			return sb.ToString ();
 		}
 
 		static string ToString (TypeAttributes attributes)
