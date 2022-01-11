@@ -307,6 +307,8 @@ namespace asminfo
 
 			ShowAttributes (indent, field);
 			PrintIndent (indent);
+			Print (field.FieldType.FullName);
+			Print (" ");
 			Print (field.Name);
 			Print ($" ({ToString (field.Attributes)})");
 			PrintLine (string.Empty);
