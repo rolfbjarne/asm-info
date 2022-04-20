@@ -387,7 +387,7 @@ namespace asminfo
 
 			Console.WriteLine ($"{ad.FullName}");
 			foreach (var d in ad.MainModule.CustomDebugInformations) {
-				Console.WriteLine ($"\tCustom debug info: {d.Kind}");
+				Console.WriteLine ($"\tCustom debug info: {d.Kind} Identifier: {d.Identifier} HasCustomDebugInformations: {d.HasCustomDebugInformations}");
 			}
 			var reader = ad.MainModule.SymbolReader;
 			Console.WriteLine ($"\tSymbolReader: {reader?.GetType ()}");
