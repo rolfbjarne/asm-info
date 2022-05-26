@@ -353,6 +353,7 @@ namespace asminfo
 			}
 			Print (method.FullName);
 			Print ($" ({ToString (method.Attributes)})");
+			Print ($" // Token: {method.MetadataToken}");
 			PrintLine (string.Empty);
 			return rv;
 		}
