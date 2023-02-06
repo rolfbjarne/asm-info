@@ -14,6 +14,7 @@ namespace asminfo
 	{
 		static string filter;
 		static string filtertype;
+		static string filtermember;
 		static bool show_typedefs;
 		static bool show_methoddefs;
 		static bool show_fielddefs;
@@ -23,6 +24,7 @@ namespace asminfo
 		static bool show_pe = true;
 		static bool show_pe_headers;
 		static bool show_attributes;
+		static bool print_il;
 
 		static void CollectAssemblies (string directory, HashSet<string> files)
 		{
@@ -63,6 +65,8 @@ namespace asminfo
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 				{ "a|attributes", "Show attributes", v => show_attributes = true },
 				{ "filtertype=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
+				{ "filtermethod=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
+				{ "il", "Print IL", v => print_il = true },
 			};
 
 			foreach (var f in options.Parse (args))
@@ -120,7 +124,24 @@ namespace asminfo
 			}
 		}
 
-		static int Process (string file)
+        static IEnumerable<T> FilteredMembers<T> (IEnumerable<T> members) where T: IMemberDefinition
+        {
+            if (string.IsNullOrEmpty(filtermember))
+            {
+                foreach (var f in members)
+                    yield return f;
+            }
+            else
+            {
+                foreach (var f in members)
+                {
+                    var membername = f.Name;
+                    if (membername.IndexOf(filtermember, StringComparison.OrdinalIgnoreCase) >= 0)
+                        yield return f;
+                }
+            }
+        }
+        static int Process (string file)
 		{
 			if (show_typedefs) {
 				ShowTypeDefs (file);
@@ -337,7 +358,7 @@ namespace asminfo
 		static int ShowMethodDefs (int indent, IEnumerable<MethodDefinition> methods)
 		{
 			var rv = 0;
-			foreach (var method in methods)
+			foreach (var method in FilteredMembers (methods))
 				rv |= ShowMethodDef (indent, method);
 			return rv;
 		}
@@ -355,7 +376,22 @@ namespace asminfo
 			Print ($" ({ToString (method.Attributes)})");
 			Print ($" // Token: {method.MetadataToken}");
 			PrintLine (string.Empty);
+			PrintIL (indent, method);
 			return rv;
+		}
+
+		static int PrintIL (int indent, MethodDefinition method)
+		{
+			if (!print_il)
+				return 0;
+
+			if (!method.HasBody)
+				return 0;
+
+			var instructions = method.Body.Instructions;
+			foreach (var instr in instructions)
+                PrintLine ($"IL_{instr.Offset:X4}: {instr.ToString()}");
+			return 0;
 		}
 
 		static void Print (string message)
