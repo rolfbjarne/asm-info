@@ -390,7 +390,10 @@ namespace asminfo
 
 			var instructions = method.Body.Instructions;
 			foreach (var instr in instructions)
-                PrintLine ($"IL_{instr.Offset:X4}: {instr.ToString()}");
+			{
+				PrintIndent(indent + 1);
+				PrintLine($"{instr.ToString()}");
+			}
 			return 0;
 		}
 
