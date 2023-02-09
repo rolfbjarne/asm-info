@@ -24,9 +24,11 @@ namespace asminfo
 		static bool show_pe = true;
 		static bool show_pe_headers;
 		static bool show_attributes;
+		static bool show_attributes_when_listing_assembly_references;
 		static bool print_il;
+		static List<string> print_resources = new List<string>();
 
-		static void CollectAssemblies (string directory, HashSet<string> files)
+        static void CollectAssemblies (string directory, HashSet<string> files)
 		{
 			foreach (var f in Directory.GetFiles (directory)) {
 				switch (Path.GetExtension (f).ToUpper ()) {
@@ -67,6 +69,8 @@ namespace asminfo
 				{ "filtertype=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
 				{ "filtermethod=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
 				{ "il", "Print IL", v => print_il = true },
+				{ "list-attributes-when-showing-assembly-references-in-custom-attributes", v => show_attributes_when_listing_assembly_references = true },
+				{ "print-resource=", "Print the specified resource", v => print_resources.Add (v) },
 			};
 
 			foreach (var f in options.Parse (args))
@@ -136,14 +140,14 @@ namespace asminfo
                 foreach (var f in members)
                 {
                     var membername = f.Name;
-                    if (membername.IndexOf(filtermember, StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (membername.Equals(filtermember, StringComparison.OrdinalIgnoreCase))
                         yield return f;
                 }
             }
         }
         static int Process (string file)
 		{
-			if (show_typedefs) {
+			if (show_typedefs || print_il) {
 				ShowTypeDefs (file);
 			} else if (show_debug_info) {
 				ShowDebugInfo (file);
@@ -294,18 +298,22 @@ namespace asminfo
 		{
 			var rv = 0;
 
-			ShowAttributes (indent, td);
+			if (show_typedefs) {
+				ShowAttributes (indent, td);
 
-			PrintIndent (indent);
-			Print ($"{td.FullName}");
-			if (td.BaseType != null)
-				Print ($" : {td.BaseType?.FullName}");
-			Print ($" ({ToString (td.Attributes)})");
-			Print ($" {td.Methods.Count} methods, {td.Fields.Count} fields, {td.Properties.Count} properties, {td.Events.Count} events, {td.HasNestedTypes} nested types");
-			PrintLine ("");
-			if (td.HasNestedTypes)
-				rv |= ShowTypeDefs (indent + 1, td.NestedTypes);
-			if (show_methoddefs && td.HasMethods)
+				PrintIndent(indent);
+				Print($"{td.FullName}");
+				if (td.BaseType != null)
+					Print($" : {td.BaseType?.FullName}");
+				Print($" ({ToString(td.Attributes)})");
+				Print($" {td.Methods.Count} methods, {td.Fields.Count} fields, {td.Properties.Count} properties, {td.Events.Count} events, {td.HasNestedTypes} nested types");
+				PrintLine("");
+            }
+			if ((show_typedefs || print_il) && td.HasNestedTypes)
+			{
+				rv |= ShowTypeDefs(indent + 1, td.NestedTypes);
+			}
+            if ((show_methoddefs || print_il) && td.HasMethods)
 				ShowMethodDefs (indent + 1, td.Methods);
 			if (show_fielddefs && td.HasFields)
 				ShowFieldDefs (indent + 1, td.Fields);
@@ -388,12 +396,58 @@ namespace asminfo
 			if (!method.HasBody)
 				return 0;
 
-			var instructions = method.Body.Instructions;
+			var body = method.Body;
+			var instructions = body.Instructions;
 			foreach (var instr in instructions)
 			{
 				PrintIndent(indent + 1);
 				PrintLine($"{instr.ToString()}");
 			}
+
+			if (body.HasExceptionHandlers) {
+				PrintIndent(indent + 1);
+				PrintLine($"{body.ExceptionHandlers.Count} exception handlers:");
+				foreach (var eh in body.ExceptionHandlers)
+				{
+					PrintIndent(indent + 2);
+					PrintLine($"{eh.HandlerType}:");
+					if (eh.CatchType is not null)
+					{
+						PrintIndent(indent + 3);
+						PrintLine($"CatchType: {eh.CatchType.FullName}");
+                    }
+                    if (eh.FilterStart is not null)
+                    {
+                        PrintIndent(indent + 3);
+                        PrintLine($"FilterStart: {eh.FilterStart}");
+                    }
+                    if (eh.TryStart is not null)
+                    {
+                        PrintIndent(indent + 3);
+                        PrintLine($"TryStart: {eh.TryStart}");
+                    }
+                    if (eh.TryEnd is not null)
+                    {
+                        PrintIndent(indent + 3);
+                        PrintLine($"TryEnd: {eh.TryEnd}");
+                    }
+                    if (eh.HandlerStart is not null)
+                    {
+                        PrintIndent(indent + 3);
+                        PrintLine($"HandlerStart: {eh.HandlerStart}");
+                    }
+                    if (eh.HandlerEnd is not null)
+                    {
+                        PrintIndent(indent + 3);
+                        PrintLine($"HandlerEnd: {eh.HandlerEnd}");
+                    }
+                }
+			} else
+            {
+                PrintIndent(indent + 1);
+                PrintLine($"No exception handlers.");
+            }
+
 			return 0;
 		}
 
@@ -674,34 +728,36 @@ namespace asminfo
 							Console.WriteLine ("    Assembly references in custom attributes:");
 							foreach (var r in anrs.OrderBy (v => v.Key)) {
 								Console.WriteLine ("        {0}", r.Key);
-								foreach (var ca in r.Value) {
-									Console.Write ($"            {ca.AttributeType.FullName} (");
-									bool first = true;
-									if (ca.HasConstructorArguments) {
-										foreach (var arg in ca.ConstructorArguments) {
-											if (!first)
-												Console.Write (", ");
-											first = false;
-											Console.Write (arg.Value);
+								if (show_attributes_when_listing_assembly_references) { 
+									foreach (var ca in r.Value) {
+										Console.Write ($"            {ca.AttributeType.FullName} (");
+										bool first = true;
+										if (ca.HasConstructorArguments) {
+											foreach (var arg in ca.ConstructorArguments) {
+												if (!first)
+													Console.Write (", ");
+												first = false;
+												Console.Write (arg.Value);
+											}
 										}
-									}
-									if (ca.HasFields) {
-										foreach (var arg in ca.Fields) {
-											if (!first)
-												Console.Write (", ");
-											first = false;
-											Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+										if (ca.HasFields) {
+											foreach (var arg in ca.Fields) {
+												if (!first)
+													Console.Write (", ");
+												first = false;
+												Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+											}
 										}
-									}
-									if (ca.HasProperties) {
-										foreach (var arg in ca.Properties) {
-											if (!first)
-												Console.Write (", ");
-											first = false;
-											Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+										if (ca.HasProperties) {
+											foreach (var arg in ca.Properties) {
+												if (!first)
+													Console.Write (", ");
+												first = false;
+												Console.Write ($"{arg.Name} = {arg.Argument.Value}");
+											}
 										}
+										Console.WriteLine (")");
 									}
-									Console.WriteLine (")");
 								}
 							}
 						}
@@ -719,6 +775,13 @@ namespace asminfo
 						case ResourceType.Embedded:
 							var er = (EmbeddedResource) res;
 							Console.WriteLine ($"        {res.Name} ({res.ResourceType}) Size: {er.GetResourceData ().Length} bytes");
+								if (print_resources.Contains ("all") ||  print_resources.Contains (er.Name))
+								{
+									var text = System.Text.Encoding.UTF8.GetString(er.GetResourceData ());
+									Console.WriteLine($"---- RESOURCE {er.Name} RESOURCE ----");
+									Console.WriteLine(text);
+                                    Console.WriteLine($"---- END RESOURCE {er.Name} RESOURCE END ----");
+                                }
 							break;
 						default:
 							Console.WriteLine ($"        {res.Name} ({res.ResourceType})");
