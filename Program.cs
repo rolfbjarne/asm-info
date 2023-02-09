@@ -397,6 +397,18 @@ namespace asminfo
 				return 0;
 
 			var body = method.Body;
+
+			if (body.HasVariables)
+			{
+				PrintIndent(indent + 1);
+				PrintLine($"{body.Variables.Count} local variables:");
+				foreach (var variable in body.Variables)
+				{
+					PrintIndent(indent + 2);
+					PrintLine($"{variable.VariableType.FullName} V_{variable.Index}");
+				}
+			}
+
 			var instructions = body.Instructions;
 			foreach (var instr in instructions)
 			{
