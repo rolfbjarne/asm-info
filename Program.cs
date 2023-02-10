@@ -380,7 +380,25 @@ namespace asminfo
 				var pimpl = method.PInvokeInfo;
 				Print ($"[DllImport (\"{pimpl.Module.Name}\", EntryPoint = \"{pimpl.EntryPoint}\")] ");
 			}
-			Print (method.FullName);
+			Print(method.ReturnType.FullName);
+			Print(" ");
+			Print(method.DeclaringType.FullName);
+			Print("::");
+			Print(method.Name);
+			Print(" (");
+			if (method.HasParameters)
+			{
+				for (var i = 0; i < method.Parameters.Count; i++)
+				{
+					if (i > 0)
+						Print(", ");
+					var p = method.Parameters[i];
+					Print(p.ParameterType.FullName);
+					Print(" ");
+					Print(p.Name);
+				}
+			}
+			Print(")");
 			Print ($" ({ToString (method.Attributes)})");
 			Print ($" // Token: {method.MetadataToken}");
 			PrintLine (string.Empty);
