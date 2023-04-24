@@ -306,8 +306,12 @@ namespace asminfo
 				if (td.BaseType != null)
 					Print($" : {td.BaseType?.FullName}");
 				Print($" ({ToString(td.Attributes)})");
-				Print($" {td.Methods.Count} methods, {td.Fields.Count} fields, {td.Properties.Count} properties, {td.Events.Count} events, {td.HasNestedTypes} nested types");
-				PrintLine("");
+				PrintLine($" {td.Methods.Count} methods, {td.Fields.Count} fields, {td.Properties.Count} properties, {td.Events.Count} events, {td.NestedTypes.Count} nested types, implements {td.Interfaces.Count} interfaces, {td.CustomAttributes.Count} custom attributes");
+				if (td.Interfaces.Any())
+				{
+					PrintIndent(indent + 1);
+					PrintLine($"Implements: {string.Join(", ", td.Interfaces.Select(v => v.InterfaceType.FullName))}");
+				}
             }
 			if ((show_typedefs || print_il) && td.HasNestedTypes)
 			{
