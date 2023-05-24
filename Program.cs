@@ -112,21 +112,19 @@ namespace asminfo
 			}
 		}
 
-		static IEnumerable<TypeDefinition> FilteredTypes (IEnumerable<TypeDefinition> types)
+		static bool IsFiltered (TypeDefinition type)
 		{
-			if (string.IsNullOrEmpty (filtertype)) {
-				foreach (var f in types)
-					yield return f;
-			} else {
-				foreach (var f in types) {
-					var typename = f.FullName;
-					if (string.IsNullOrEmpty (typename))
-						typename = f.Name;
-					if (typename.IndexOf (filtertype, StringComparison.OrdinalIgnoreCase) >= 0)
-						yield return f;
-				}
-			}
-		}
+			if (string.IsNullOrEmpty(filtertype))
+				return false;
+
+            var typename = type.FullName;
+            if (string.IsNullOrEmpty(typename))
+                typename = type.Name;
+            if (typename.IndexOf(filtertype, StringComparison.OrdinalIgnoreCase) >= 0)
+				return false;
+
+			return true;
+        }
 
         static IEnumerable<T> FilteredMembers<T> (IEnumerable<T> members) where T: IMemberDefinition
         {
@@ -163,6 +161,7 @@ namespace asminfo
 		static int ShowTypeDefs (string file)
 		{
 			var ad = AssemblyDefinition.ReadAssembly (file, new ReaderParameters { ReadingMode = ReadingMode.Deferred });
+			
 			var rv = 0;
 			PrintLine ($"{ad.FullName}");
 			rv |= ShowTypeDefs (1, ad.MainModule.Types);
@@ -172,8 +171,12 @@ namespace asminfo
 		static int ShowTypeDefs (int indent, IEnumerable<TypeDefinition> types)
 		{
 			var rv = 0;
-			foreach (var td in FilteredTypes (types))
-				rv |= ShowTypeDef (indent, td);
+			foreach (var td in types)
+			{
+				rv |= ShowTypeDef(indent, td);
+				if (td.HasNestedTypes)
+					rv |= ShowTypeDefs(indent + 1, td.NestedTypes);
+			}
 			return rv;
 		}
 
@@ -298,7 +301,11 @@ namespace asminfo
 		{
 			var rv = 0;
 
-			if (show_typedefs) {
+			var isFiltered = IsFiltered(td);
+			if (isFiltered)
+				return rv;
+
+            if (show_typedefs) {
 				ShowAttributes (indent, td);
 
 				PrintIndent(indent);
@@ -313,10 +320,6 @@ namespace asminfo
 					PrintLine($"Implements: {string.Join(", ", td.Interfaces.Select(v => v.InterfaceType.FullName))}");
 				}
             }
-			if ((show_typedefs || print_il) && td.HasNestedTypes)
-			{
-				rv |= ShowTypeDefs(indent + 1, td.NestedTypes);
-			}
             if ((show_methoddefs || print_il) && td.HasMethods)
 				ShowMethodDefs (indent + 1, td.Methods);
 			if (show_fielddefs && td.HasFields)
