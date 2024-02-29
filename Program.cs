@@ -27,6 +27,7 @@ namespace asminfo
 		static bool show_attributes_when_listing_assembly_references;
 		static bool print_il;
 		static List<string> print_resources = new List<string>();
+		static List<string> libraries = new List<string> ();
 
         static void CollectAssemblies (string directory, HashSet<string> files)
 		{
@@ -71,6 +72,7 @@ namespace asminfo
 				{ "il", "Print IL", v => print_il = true },
 				{ "list-attributes-when-showing-assembly-references-in-custom-attributes", v => show_attributes_when_listing_assembly_references = true },
 				{ "print-resource=", "Print the specified resource", v => print_resources.Add (v) },
+				{ "lib=", "Additional directories where to find assemblies", v => libraries.Add (v) },
 			};
 
 			foreach (var f in options.Parse (args))
@@ -291,7 +293,12 @@ namespace asminfo
 			if (!provider.HasCustomAttributes)
 				return;
 
-			foreach (var ca in provider.CustomAttributes) {
+			ShowAttributes (indent, provider.CustomAttributes);
+		}
+
+		static void ShowAttributes (int indent, IEnumerable<CustomAttribute> attributes)
+		{
+			foreach (var ca in attributes) {
 				PrintIndent (indent);
 				RenderAttribute (ca);
 			}
@@ -714,6 +721,8 @@ namespace asminfo
 				var rp = new ReaderParameters (ReadingMode.Deferred);
 				var resolver = new DefaultAssemblyResolver ();
 				resolver.AddSearchDirectory (Path.GetDirectoryName (file));
+				foreach (var lib in libraries)
+					resolver.AddSearchDirectory (lib);
 				rp.AssemblyResolver = resolver;
 
 				var mod = AssemblyDefinition.ReadAssembly (fs, rp);
@@ -737,6 +746,13 @@ namespace asminfo
 				}
 				if (mod.MainModule.HasCustomAttributes) {
 					try {
+						if (show_attributes) {
+							Console.WriteLine ("    Assembly attributes:");
+							ShowAttributes (1, mod);
+							Console.WriteLine ("    Module attributes:");
+							ShowAttributes (1, mod.MainModule);
+						}
+
 						var all_attributes = mod.MainModule.GetCustomAttributes ().ToList ();
 						var anrs = new Dictionary<string, List<CustomAttribute>> ();
 						foreach (var ca in all_attributes) {
