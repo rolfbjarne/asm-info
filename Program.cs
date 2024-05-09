@@ -257,10 +257,15 @@ namespace asminfo
 			}
 		}
 
-		static void RenderAttribute (CustomAttribute ca)
+		static void RenderAttribute (CustomAttribute ca, string globalAttributeType = null)
 		{
-			Print ($"[{ca.AttributeType.FullName} (");
+			var attributeType = ca.AttributeType.FullName;
+			if (attributeType.EndsWith ("Attribute", StringComparison.Ordinal))
+				attributeType = attributeType.Substring (0, attributeType.Length - "Attribute".Length);
+			Print ($"[{(globalAttributeType is null ? string.Empty : globalAttributeType + ": ")}{attributeType}");
 			var argCount = 0;
+			if (ca.HasConstructorArguments || ca.HasFields)
+				Print (" (");
 			if (ca.HasConstructorArguments) {
 				for (var i = 0; i < ca.ConstructorArguments.Count; i++) {
 					if (argCount > 0)
@@ -282,10 +287,12 @@ namespace asminfo
 				}
 			}
 
-			PrintLine (")]");
+			if (ca.HasConstructorArguments || ca.HasFields)
+				Print (")");
+			PrintLine ("]");
 		}
 
-		static void ShowAttributes (int indent, ICustomAttributeProvider provider)
+		static void ShowAttributes (int indent, ICustomAttributeProvider provider, string globalAttributeType = null)
 		{
 			if (!show_attributes)
 				return;
@@ -300,7 +307,7 @@ namespace asminfo
 		{
 			foreach (var ca in attributes) {
 				PrintIndent (indent);
-				RenderAttribute (ca);
+				RenderAttribute (ca, globalAttributeType);
 			}
 		}
 
@@ -745,6 +752,8 @@ namespace asminfo
 					Console.WriteLine ("    No direct assembly references.");
 				}
 				if (mod.MainModule.HasCustomAttributes) {
+					Console.WriteLine ($"    Attributes:");
+					ShowAttributes (1, mod.MainModule, "assembly");
 					try {
 						if (show_attributes) {
 							Console.WriteLine ("    Assembly attributes:");
