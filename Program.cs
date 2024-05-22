@@ -19,7 +19,7 @@ namespace asminfo
 		static bool show_methoddefs;
 		static bool show_fielddefs;
 		static bool show_propertydefs;
-		static bool show_pinvoke;
+		// static bool show_pinvoke;
 		static bool show_debug_info;
 		static bool show_pe = true;
 		static bool show_pe_headers;
@@ -300,10 +300,10 @@ namespace asminfo
 			if (!provider.HasCustomAttributes)
 				return;
 
-			ShowAttributes (indent, provider.CustomAttributes);
+			ShowAttributes (indent, provider.CustomAttributes, globalAttributeType);
 		}
 
-		static void ShowAttributes (int indent, IEnumerable<CustomAttribute> attributes)
+		static void ShowAttributes (int indent, IEnumerable<CustomAttribute> attributes, string globalAttributeType = null)
 		{
 			foreach (var ca in attributes) {
 				PrintIndent (indent);
@@ -751,15 +751,12 @@ namespace asminfo
 				} else {
 					Console.WriteLine ("    No direct assembly references.");
 				}
-				if (mod.MainModule.HasCustomAttributes) {
-					Console.WriteLine ($"    Attributes:");
-					ShowAttributes (1, mod.MainModule, "assembly");
+				if (mod.MainModule.HasCustomAttributes || mod.HasCustomAttributes) {
 					try {
 						if (show_attributes) {
-							Console.WriteLine ("    Assembly attributes:");
-							ShowAttributes (1, mod);
-							Console.WriteLine ("    Module attributes:");
-							ShowAttributes (1, mod.MainModule);
+							Console.WriteLine ($"    Attributes:");
+							ShowAttributes (1, mod, "assembly");
+							ShowAttributes (1, mod.MainModule, "module");
 						}
 
 						var all_attributes = mod.MainModule.GetCustomAttributes ().ToList ();
