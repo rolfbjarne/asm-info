@@ -67,16 +67,31 @@ namespace asminfo
 				{ "debug-info", "Show debug information", v => show_debug_info = true },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 				{ "a|attributes", "Show attributes", v => show_attributes = true },
+				
 				{ "filtertype=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
+				{ "filter-type=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
+				{ "type-filter=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
+				{ "typefilter=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
+				
 				{ "filtermethod=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
+				{ "filter-method=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
+				{ "methodfilter=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
+				{ "method-filter=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
+
 				{ "il", "Print IL", v => print_il = true },
 				{ "list-attributes-when-showing-assembly-references-in-custom-attributes", v => show_attributes_when_listing_assembly_references = true },
 				{ "print-resource=", "Print the specified resource", v => print_resources.Add (v) },
 				{ "lib=", "Additional directories where to find assemblies", v => libraries.Add (v) },
 			};
 
-			foreach (var f in options.Parse (args))
-				files.Add (f);
+			foreach (var f in options.Parse(args))
+			{
+				if (f [0] == '-') {
+					Console.WriteLine($"Unknown command line argument: {f}");
+					return 1;
+				}
+				files.Add(f);
+			}
 
 			if (show_help) {
 				Console.WriteLine ("asm-info [options] assembly1 [assembly2+]");
