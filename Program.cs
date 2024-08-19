@@ -164,7 +164,7 @@ namespace asminfo
         }
         static int Process (string file)
 		{
-			if (show_typedefs || print_il) {
+			if (show_typedefs || print_il) {
 				ShowTypeDefs (file);
 			} else if (show_debug_info) {
 				ShowDebugInfo (file);
@@ -179,7 +179,7 @@ namespace asminfo
 
 		static int ShowTypeDefs (string file)
 		{
-			var ad = AssemblyDefinition.ReadAssembly (file, new ReaderParameters { ReadingMode = ReadingMode.Deferred });
+			var ad = AssemblyDefinition.ReadAssembly (file, GetReaderParameters (file));
 			
 			var rv = 0;
 			PrintLine ($"{ad.FullName}");
@@ -538,7 +538,7 @@ namespace asminfo
 		static int ShowDebugInfo (string file)
 		{
 			AssemblyDefinition ad;
-			var rp = new ReaderParameters { ReadingMode = ReadingMode.Deferred };
+			var rp = GetReaderParameters (file);
 
 			rp.ReadSymbols = true;
 			try {
@@ -723,6 +723,18 @@ namespace asminfo
 			return sb.ToString ();
 		}
 
+		static ReaderParameters GetReaderParameters (string file)
+		{
+			var rp = new ReaderParameters (ReadingMode.Deferred);
+			var resolver = new DefaultAssemblyResolver ();
+			resolver.AddSearchDirectory (Path.GetDirectoryName (file));
+			foreach (var lib in libraries) {
+				resolver.AddSearchDirectory (lib);
+			}
+			rp.AssemblyResolver = resolver;
+			return rp;
+		}
+
 		public static void ShowPE (string file)
 		{
 			using (var fs = new FileStream (file, System.IO.FileMode.Open, System.IO.FileAccess.Read)) {
@@ -743,14 +755,7 @@ namespace asminfo
 					sb.Append (hash [i].ToString ("X2"));
 				fs.Position = 0;
 
-				var rp = new ReaderParameters (ReadingMode.Deferred);
-				var resolver = new DefaultAssemblyResolver ();
-				resolver.AddSearchDirectory (Path.GetDirectoryName (file));
-				foreach (var lib in libraries)
-					resolver.AddSearchDirectory (lib);
-				rp.AssemblyResolver = resolver;
-
-				var mod = AssemblyDefinition.ReadAssembly (fs, rp);
+				var mod = AssemblyDefinition.ReadAssembly (fs, GetReaderParameters (file));
 
 				Console.WriteLine ("{0} (MD5: {1}) {2}:", file, sb.ToString (), mod.FullName);
 
