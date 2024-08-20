@@ -15,6 +15,7 @@ namespace asminfo
 		static string filter;
 		static string filtertype;
 		static string filtermember;
+		static bool show_api;
 		static bool show_typedefs;
 		static bool show_methoddefs;
 		static bool show_fielddefs;
@@ -60,6 +61,7 @@ namespace asminfo
 						CollectAssemblies (v, files);
 					}
 				},
+				{ "api", "Show the API", v => show_api = true },
 				{ "pe-headers", "Show PE headers", v => show_pe_headers = true },
 				{ "typedef", "List types", v => show_typedefs = true },
 				{ "methoddef", "List methods", v => show_methoddefs = true },
@@ -104,6 +106,13 @@ namespace asminfo
 			if (files.Count == 0) {
 				Console.WriteLine ("No files specified");
 				return 1;
+			}
+
+			if (show_api) {
+				show_methoddefs = true;
+				show_typedefs = true;
+				show_fielddefs = true;
+				show_attributes = true;
 			}
 
 			foreach (var f in Filtered (files)) {
@@ -199,7 +208,7 @@ namespace asminfo
 			return rv;
 		}
 
-		static void RenderConstant (CustomAttributeArgument arg)
+		static void RenderConstant (StringBuilder sb, CustomAttributeArgument arg)
 		{
 			var obj = arg.Value;
 			var resolvedType = arg.Type.Resolve ();
@@ -231,82 +240,85 @@ namespace asminfo
 						}
 					});
 					if (enumFields.Any ()) {
-						Print ($"{string.Join (" | ", enumFields.Select (v => $"{resolvedType.FullName}.{v.Name}"))}");
+						sb.Append ($"{string.Join (" | ", enumFields.Select (v => $"{resolvedType.FullName}.{v.Name}"))}");
 						return;
 					} else {
-						Print ("(" + resolvedType.FullName + ") ");
+						sb.Append ("(" + resolvedType.FullName + ") ");
 					}
 				} else {
 					var enumField = resolvedType.Fields.FirstOrDefault (v => {
 						return v.IsStatic && v.Constant == obj;
 					});
 					if (enumField != null) {
-						Print ($"{resolvedType.FullName}.{enumField.Name}");
+						sb.Append ($"{resolvedType.FullName}.{enumField.Name}");
 						return;
 					} else {
-						Print ("(" + resolvedType.FullName + ") ");
+						sb.Append ("(" + resolvedType.FullName + ") ");
 					}
 				}
 			}
 
 			if (obj is null) {
-				Print ("null");
+				sb.Append("null");
 			} else if (obj is string str) {
-				Print ($"\"{str.Replace ("\"", "\\\"")}\"");
+				sb.Append($"\"{str.Replace("\"", "\\\"")}\"");
 			} else if (obj is byte b) {
-				Print ($"{b}");
-			} else if (obj is sbyte sb) {
-				Print ($"{sb}");
+				sb.Append($"{b}");
+			} else if (obj is sbyte signedByte) {
+				sb.Append($"{signedByte}");
 			} else if (obj is short sh) {
-				Print ($"{sh}");
+				sb.Append($"{sh}");
 			} else if (obj is ushort ush) {
-				Print ($"{ush}");
+				sb.Append($"{ush}");
 			} else if (obj is int i) {
-				Print ($"{i}");
+				sb.Append($"{i}");
 			} else if (obj is uint u) {
-				Print ($"{u}");
+				sb.Append($"{u}");
 			} else if (obj is long l) {
-				Print ($"{l}");
+				sb.Append($"{l}");
 			} else if (obj is ulong ul) {
-				Print ($"{ul}");
+				sb.Append($"{ul}");
+			} else if (obj is bool boo) {
+				sb.Append($"{boo}");
 			} else {
-				Print ($"Unknown type: {obj.GetType ().FullName} Value: {obj}");
+				sb.Append ($"Unknown type: {obj.GetType ().FullName} Value: {obj}");
 			}
 		}
 
-		static void RenderAttribute (CustomAttribute ca, string globalAttributeType = null)
+		static string RenderAttribute (StringBuilder sb, CustomAttribute ca, string globalAttributeType = null)
 		{
 			var attributeType = ca.AttributeType.FullName;
 			if (attributeType.EndsWith ("Attribute", StringComparison.Ordinal))
 				attributeType = attributeType.Substring (0, attributeType.Length - "Attribute".Length);
-			Print ($"[{(globalAttributeType is null ? string.Empty : globalAttributeType + ": ")}{attributeType}");
+			sb.Append ($"[{(globalAttributeType is null ? string.Empty : globalAttributeType + ": ")}{attributeType}");
 			var argCount = 0;
 			if (ca.HasConstructorArguments || ca.HasFields)
-				Print (" (");
+				sb.Append (" (");
 			if (ca.HasConstructorArguments) {
 				for (var i = 0; i < ca.ConstructorArguments.Count; i++) {
 					if (argCount > 0)
-						Print (", ");
+						sb.Append (", ");
 					var arg = ca.ConstructorArguments [i];
-					RenderConstant (arg);
+					RenderConstant (sb, arg);
 					argCount++;
 				}
 			}
 			if (ca.HasFields) {
 				for (var i = 0; i < ca.Fields.Count; i++) {
 					if (argCount > 0)
-						Print (", ");
+						sb.Append (", ");
 					var field = ca.Fields [i];
-					Print (field.Name);
-					Print (" = ");
-					RenderConstant (field.Argument);
+					sb.Append (field.Name);
+					sb.Append (" = ");
+					RenderConstant (sb, field.Argument);
 					argCount++;
 				}
 			}
 
 			if (ca.HasConstructorArguments || ca.HasFields)
-				Print (")");
-			PrintLine ("]");
+				sb.Append (")");
+			sb.Append ("]");
+			return sb.ToString();
 		}
 
 		static void ShowAttributes (int indent, ICustomAttributeProvider provider, string globalAttributeType = null)
@@ -322,10 +334,20 @@ namespace asminfo
 
 		static void ShowAttributes (int indent, IEnumerable<CustomAttribute> attributes, string globalAttributeType = null)
 		{
+			if (!attributes.Any())
+				return;
+
+			var lines = new List<string>();
+			var sb = new StringBuilder();
 			foreach (var ca in attributes) {
-				PrintIndent (indent);
-				RenderAttribute (ca, globalAttributeType);
+				sb.Clear();
+				PrintIndent (sb, indent);
+				RenderAttribute (sb, ca, globalAttributeType);
+				lines.Add(sb.ToString());
 			}
+			lines.Sort();
+			foreach (var line in lines)
+				PrintLine (line);
 		}
 
 		static int ShowTypeDef (int indent, TypeDefinition td)
@@ -344,7 +366,14 @@ namespace asminfo
 				if (td.BaseType != null)
 					Print($" : {td.BaseType?.FullName}");
 				Print($" ({ToString(td.Attributes)})");
-				PrintLine($" {td.Methods.Count} methods, {td.Fields.Count} fields, {td.Properties.Count} properties, {td.Events.Count} events, {td.NestedTypes.Count} nested types, implements {td.Interfaces.Count} interfaces, {td.CustomAttributes.Count} custom attributes");
+				if (show_api)
+				{
+					PrintLine("");
+				}
+				else
+				{
+					PrintLine($" {td.Methods.Count} methods, {td.Fields.Count} fields, {td.Properties.Count} properties, {td.Events.Count} events, {td.NestedTypes.Count} nested types, implements {td.Interfaces.Count} interfaces, {td.CustomAttributes.Count} custom attributes");
+				}
 				if (td.Interfaces.Any())
 				{
 					PrintIndent(indent + 1);
@@ -533,6 +562,11 @@ namespace asminfo
 		static void PrintIndent (int indent)
 		{
 			Console.Write (new string ('\t', indent));
+		}
+
+		static void PrintIndent (StringBuilder sb, int indent)
+		{
+			sb.Append ('\t', indent);
 		}
 
 		static int ShowDebugInfo (string file)
