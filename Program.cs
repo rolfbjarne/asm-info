@@ -12,9 +12,9 @@ namespace asminfo
 {
 	class MainClass
 	{
-		static string filter;
-		static string filtertype;
-		static string filtermember;
+		static string? filter;
+		static string? filtertype;
+		static string? filtermember;
 		static bool show_api;
 		static bool show_typedefs;
 		static bool show_methoddefs;
@@ -51,7 +51,7 @@ namespace asminfo
 			var files = new HashSet<string> ();
 			var show_help = false;
 			
-			OptionSet options = null;
+			OptionSet options;
 			options = new OptionSet () {
 				{ "h|?|help", "Help!", v => show_help = true },
 				{ "r|recurse:", "Recursive and find all assemblies in the specified directory", v =>
@@ -285,7 +285,7 @@ namespace asminfo
 			}
 		}
 
-		static string RenderAttribute (StringBuilder sb, CustomAttribute ca, string globalAttributeType = null)
+		static string RenderAttribute (StringBuilder sb, CustomAttribute ca, string? globalAttributeType = null)
 		{
 			var attributeType = ca.AttributeType.FullName;
 			if (attributeType.EndsWith ("Attribute", StringComparison.Ordinal))
@@ -321,7 +321,7 @@ namespace asminfo
 			return sb.ToString();
 		}
 
-		static void ShowAttributes (int indent, ICustomAttributeProvider provider, string globalAttributeType = null)
+		static void ShowAttributes (int indent, ICustomAttributeProvider provider, string? globalAttributeType = null)
 		{
 			if (!show_attributes)
 				return;
@@ -332,7 +332,7 @@ namespace asminfo
 			ShowAttributes (indent, provider.CustomAttributes, globalAttributeType);
 		}
 
-		static void ShowAttributes (int indent, IEnumerable<CustomAttribute> attributes, string globalAttributeType = null)
+		static void ShowAttributes (int indent, IEnumerable<CustomAttribute> attributes, string? globalAttributeType = null)
 		{
 			if (!attributes.Any())
 				return;
@@ -830,7 +830,7 @@ namespace asminfo
 								if (arg.Type.Namespace != "System" || arg.Type.Name != "Type")
 									continue;
 								var tr = arg.Value as TypeReference;
-								var ar = tr.Scope as AssemblyNameReference;
+								var ar = tr!.Scope as AssemblyNameReference;
 								if (ar == null)
 									continue;
 								if (!anrs.TryGetValue (ar.FullName, out var list))

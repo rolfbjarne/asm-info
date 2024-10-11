@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.IO;
 
@@ -448,16 +449,16 @@ public class PeHeaderReader {
 	/// <typeparam name="T"></typeparam>
 	/// <param name="reader"></param>
 	/// <returns></returns>
-	public static T FromBinaryReader<T>(BinaryReader reader) {
+	public static T FromBinaryReader<[DynamicallyAccessedMembers (DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)] T>(BinaryReader reader) {
 		// Read in a byte array
-		byte[] bytes = reader.ReadBytes(Marshal.SizeOf(typeof(T)));
+		byte[] bytes = reader.ReadBytes(Marshal.SizeOf<T> ());
 
 		// Pin the managed memory while, copy it out the data, then unpin it
 		GCHandle handle = GCHandle.Alloc(bytes, GCHandleType.Pinned);
-		T theStructure = (T)Marshal.PtrToStructure(handle.AddrOfPinnedObject(), typeof(T));
+		var theStructure = Marshal.PtrToStructure<T>(handle.AddrOfPinnedObject());
 		handle.Free();
 
-		return theStructure;
+		return theStructure!;
 	}
 
 	#endregion Public Methods
@@ -518,7 +519,7 @@ public class PeHeaderReader {
 			// Add in the number of seconds since 1970/1/1
 			returnValue = returnValue.AddSeconds(fileHeader.TimeDateStamp);
 			// Adjust to local timezone
-			returnValue += TimeZone.CurrentTimeZone.GetUtcOffset(returnValue);
+			returnValue += TimeZoneInfo.Local.GetUtcOffset(returnValue);
 
 			return returnValue;
 		}

@@ -1,11 +1,13 @@
-all install: $(CURDIR)/bin/Debug/asm-info.exe $(HOME)/bin/asm-info
+ASM_INFO=$(CURDIR)/bin/Release/native/asm-info.exe
 
-$(CURDIR)/bin/Debug/asm-info.exe: $(wildcard *.cs */*.cs)
-	@msbuild /nologo /verbosity:quiet /r
+all install: $(ASM_INFO) $(HOME)/bin/asm-info
+
+$(ASM_INFO): $(wildcard *.cs */*.cs)
+	@dotnet publish /nologo /verbosity:quiet /p:PublishAot=true
 
 $(HOME)/bin/asm-info: Makefile
 	@echo "#!/bin/bash -e" > $@
 	@echo "" >> $@
-	@echo 'mono --debug $(CURDIR)/bin/Debug/asm-info.exe "$$@"' >> $@
+	@echo "$(abspath $(ASM_INFO))" "$$@" >> $@
 	@chmod +x $@
 	@echo Created $@
