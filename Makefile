@@ -8,6 +8,6 @@ $(ASM_INFO): $(wildcard *.cs */*.cs)
 $(HOME)/bin/asm-info: Makefile
 	@echo "#!/bin/bash -e" > $@
 	@echo "" >> $@
-	@echo "$(abspath $(ASM_INFO))" '$$@' >> $@
+	@echo "$(abspath $(ASM_INFO))" '"$$@"' >> $@
 	@chmod +x $@
 	@echo Created $@
