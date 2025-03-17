@@ -280,6 +280,8 @@ namespace asminfo
 				sb.Append($"{ul}");
 			} else if (obj is bool boo) {
 				sb.Append($"{boo}");
+			} else if (obj is TypeDefinition td) {
+				sb.Append($"typeof ({td.FullName})");
 			} else {
 				sb.Append ($"Unknown type: {obj.GetType ().FullName} Value: {obj}");
 			}
