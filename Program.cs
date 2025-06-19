@@ -71,12 +71,12 @@ namespace asminfo
 				{ "show-tokens:", "Show tokens (defaults to true)", v => show_token = v == "1" || v == "true" },
 				{ "f|filter=", "Filter to filter out assemblies", v => filter = v },
 				{ "a|attributes", "Show attributes", v => show_attributes = true },
-				
+
 				{ "filtertype=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
 				{ "filter-type=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
 				{ "type-filter=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
 				{ "typefilter=", "Filter to the specified type. Substring match based on the full typename.", v => filtertype = v },
-				
+
 				{ "filtermethod=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
 				{ "filter-method=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
 				{ "methodfilter=", "Filter to the specified method. Requires --filtertype too.", v => filtermember = v },
@@ -92,6 +92,8 @@ namespace asminfo
 			{
 				if (f [0] == '-') {
 					Console.WriteLine($"Unknown command line argument: {f}");
+					Console.WriteLine ("asm-info [options] assembly1 [assembly2+]");
+					options.WriteOptionDescriptions (Console.Out);
 					return 1;
 				}
 				files.Add(f);
