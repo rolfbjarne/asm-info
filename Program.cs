@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Mono.Cecil;
+using Mono.Cecil.Cil;
 using Mono.Options;
 
 namespace asminfo
@@ -466,7 +467,7 @@ namespace asminfo
 					var p = method.Parameters[i];
 					Print(p.ParameterType.FullName);
 					Print(" ");
-					Print(p.Name);
+					Print(string.IsNullOrEmpty(p.Name) ? $"arg{i}" : p.Name);
 				}
 			}
 			Print(")");
@@ -503,7 +504,8 @@ namespace asminfo
 			foreach (var instr in instructions)
 			{
 				PrintIndent(indent + 1);
-				PrintLine($"{instr.ToString()}");
+				PrintInstruction(instr);
+				PrintLine("");
 			}
 
 			if (body.HasExceptionHandlers) {
@@ -553,9 +555,66 @@ namespace asminfo
 			return 0;
 		}
 
-		static void Print (string message)
+		static void PrintInstruction(Instruction instr)
+		{
+			var operand = instr.Operand;
+			var opcode = instr.OpCode;
+
+			PrintLabel(instr);
+			Print(":");
+			Print(" ");
+			Print(opcode.Name);
+
+			if (operand == null)
+				return;
+
+			Print(" ");
+
+			switch (opcode.OperandType)
+			{
+				case OperandType.ShortInlineBrTarget:
+				case OperandType.InlineBrTarget:
+					PrintLabel((Instruction)operand);
+					break;
+				case OperandType.InlineSwitch:
+					var labels = (Instruction[])operand;
+					for (int i = 0; i < labels.Length; i++)
+					{
+						if (i > 0)
+							Print(",");
+
+						PrintLabel(labels[i]);
+					}
+					break;
+				case OperandType.InlineString:
+					Print('\"');
+					Print(operand?.ToString() ?? "");
+					Print('\"');
+					break;
+				case OperandType.ShortInlineArg:
+					var pd = (ParameterDefinition)operand;
+					Print($"arg{pd.Index}");
+					break;
+				default:
+					Print(operand?.ToString() ?? "");
+					break;
+			}
+		}
+
+		static void PrintLabel (Instruction instruction)
+		{
+			Print ("IL_");
+			Print (instruction.Offset.ToString ("x4"));
+		}
+
+		static void Print (char message)
 		{
 			Console.Write (message);
+		}
+		
+		static void Print(string message)
+		{
+			Console.Write(message);
 		}
 
 		static void PrintLine (string message)
