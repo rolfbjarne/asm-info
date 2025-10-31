@@ -51,7 +51,7 @@ namespace asminfo
 		{
 			var files = new HashSet<string> ();
 			var show_help = false;
-			
+
 			OptionSet options;
 			options = new OptionSet () {
 				{ "h|?|help", "Help!", v => show_help = true },
@@ -174,19 +174,45 @@ namespace asminfo
                 }
             }
         }
-        static int Process (string file)
+		static int Process(string file)
 		{
-			if (show_typedefs || print_il) {
-				ShowTypeDefs (file);
-			} else if (show_debug_info) {
-				ShowDebugInfo (file);
-			} else if (show_pe) {
-				ShowPE (file);
-			} else {
-				Console.WriteLine ("No action!");
+			if (string.Equals(Path.GetExtension(file), ".pdb", StringComparison.OrdinalIgnoreCase))
+			{
+				ShowEmbeddedPdbInfo(file);
+				return 0;
+			}
+
+			if (show_typedefs || print_il)
+			{
+				ShowTypeDefs(file);
+			}
+			else if (show_debug_info)
+			{
+				ShowDebugInfo(file);
+			}
+			else if (show_pe)
+			{
+				ShowPE(file);
+			}
+			else
+			{
+				Console.WriteLine("No action!");
 				return 1;
 			}
 			return 0;
+		}
+
+		static void ShowEmbeddedPdbInfo(string file)
+		{
+			Console.WriteLine($"{file}: Portable PDB");
+			if (Helper.TryGetDebugInfoForPortablePdb(file, out var value))
+			{
+				Console.WriteLine($"    {value}");
+			}
+			else
+			{
+				Console.WriteLine("    No debug info found");
+			}
 		}
 
 		static int ShowTypeDefs (string file)
@@ -838,7 +864,7 @@ namespace asminfo
 				// Get the PE timestamp.
 				fs.Position = 136;
 				byte[] buf = new byte[4];
-				fs.Read (buf, 0, 4);
+				fs.ReadExactly (buf, 0, 4);
 				int t2 = (buf [3] << 24) + (buf [2] << 16) + (buf [1] << 8) + buf [0];
 				var d = new DateTime (1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 				var d2 = d.AddSeconds (t2);
@@ -859,7 +885,15 @@ namespace asminfo
 				Console.WriteLine ("    PE timestamp: {0}", d2);
 
 				// Print the GUID
-				Console.WriteLine ("    Main module MVID: {0}", mod.MainModule.Mvid);
+				Console.WriteLine("    Main module MVID: {0}", mod.MainModule.Mvid);
+				if (Helper.TryGetDebugInfoForAssembly (file, out var debugInfo))
+				{
+					Console.WriteLine($"    {debugInfo}");
+				}
+				else
+				{
+					Console.WriteLine("    No debug info found");
+				}
 
 				Console.WriteLine ("    Architecture: {0}", mod.MainModule.Architecture);
 				Console.WriteLine ("    Runtime: {0}", mod.MainModule.Runtime);
