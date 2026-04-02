@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -311,6 +311,8 @@ namespace asminfo
 				sb.Append($"{boo}");
 			} else if (obj is TypeDefinition td) {
 				sb.Append($"typeof ({td.FullName})");
+			} else if (obj is TypeReference tr) {
+				sb.Append($"typeof ({tr.FullName} /* from '{tr.Scope?.Name}' */)");
 			} else {
 				sb.Append ($"Unknown type: {obj.GetType ().FullName} Value: {obj}");
 			}
